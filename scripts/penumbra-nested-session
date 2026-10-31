@@ -14,4 +14,4 @@ exec /usr/bin/phoc \
     --socket "$child_display" \
     -S \
     -C /usr/share/phosh/phoc.ini \
-    -E /usr/local/bin/penumbra-session
+    -E /usr/bin/penumbra-session

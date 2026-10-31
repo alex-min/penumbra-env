@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Penumbra Keyboard
 Comment=Penumbra On-Screen Virtual Keyboard
-Exec=/usr/local/bin/penumbra-keyboard
+Exec=/usr/bin/penumbra-keyboard
 Icon=input-keyboard-virtual
 Terminal=false
 Type=Application

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Settings
 Comment=Penumbra System Settings
-Exec=/usr/local/bin/penumbra-settings
+Exec=/usr/bin/penumbra-settings
 Icon=preferences-system
 Terminal=false
 Type=Application

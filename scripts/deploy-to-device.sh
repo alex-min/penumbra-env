@@ -8,8 +8,7 @@ args=()
 while (($# > 0)); do
     case "$1" in
         --build-only)
-            "$repo_root/scripts/build-arm64-alpine.sh"
-            exit 0
+            args+=(--build --no-restart)
             ;;
         --deploy-only)
             args+=(--no-build)
@@ -20,14 +19,6 @@ while (($# > 0)); do
             ;;
         --device-user)
             args+=(--user "$2")
-            shift
-            ;;
-        --device-password)
-            args+=(--password "$2")
-            shift
-            ;;
-        --sudo-password)
-            args+=(--sudo-pass "$2")
             shift
             ;;
         *)

@@ -25,10 +25,10 @@ export MOZ_ENABLE_WAYLAND=1
 export XKB_CONFIG_ROOT="${XKB_CONFIG_ROOT:-/usr/share/X11/xkb}"
 export SLINT_DEFAULT_FONT="${SLINT_DEFAULT_FONT:-/usr/share/fonts/droid/DroidSans.ttf}"
 export PENUMBRA_OUTPUT_WIDTH="${PENUMBRA_OUTPUT_WIDTH:-1080}"
-export PENUMBRA_OUTPUT_HEIGHT="${PENUMBRA_OUTPUT_HEIGHT:-2340}"
-# Shells lay out at 1:1 on the fixed 412x915 logical canvas; the compositor scales it to the panel.
+export PENUMBRA_OUTPUT_HEIGHT="${PENUMBRA_OUTPUT_HEIGHT:-1920}"
+# Shells lay out at 1:1 on the fixed 412x732 logical canvas; the compositor scales it to the panel.
 export PENUMBRA_LOGICAL_WIDTH="${PENUMBRA_LOGICAL_WIDTH:-412}"
-export PENUMBRA_LOGICAL_HEIGHT="${PENUMBRA_LOGICAL_HEIGHT:-915}"
+export PENUMBRA_LOGICAL_HEIGHT="${PENUMBRA_LOGICAL_HEIGHT:-732}"
 export PENUMBRA_SCALE_FACTOR="${PENUMBRA_SCALE_FACTOR:-1.0}"
 
 runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

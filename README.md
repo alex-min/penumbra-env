@@ -156,27 +156,36 @@ cargo test --workspace
 
 ---
 
-## Running on Hardware
+## Running on jflte with postmarketOS
 
-Penumbra targets ARM64 Linux phones (tested daily on postmarketOS / Alpine Linux on Fairphone 4). 
+This checkout includes an armv7/jflte deployment path. The postmarketOS packaging lives in the sibling `pmaports` checkout:
 
-The automated deployment script handles cross-compilation in Docker and SSH staging:
+- `pmaports/temp/penumbra-env`: Penumbra binaries, sessions, desktop files, assets, and backlight permissions.
+- `pmaports/main/postmarketos-ui-penumbra`: UI metapackage and greetd/OpenRC integration.
+
+To make Penumbra the selected UI for a fresh postmarketOS image:
 
 ```bash
-# Build ARM64 release binaries and deploy to phone
-DEVICE_PASSWORD=1 ./scripts/deploy.sh --build
-
-# Deploy existing release build without recompiling
-DEVICE_PASSWORD=1 ./scripts/deploy.sh
-
-# Deploy without restarting the session
-DEVICE_PASSWORD=1 ./scripts/deploy.sh --no-restart
-
-# Check phone connection and running status
-./scripts/deploy.sh --status
+pmbootstrap config ui penumbra
+pmbootstrap install
 ```
 
-Options can be customized via CLI flags (e.g., `--ip 172.16.42.1 --user user`) or environment variables (`DEVICE_IP`, `DEVICE_PASSWORD`, `SUDO_PASSWORD`).
+To build the local checkout and install it on an already-running jflte phone over SSH:
+
+```bash
+./scripts/deploy.sh
+```
+
+Useful variants:
+
+```bash
+./scripts/deploy.sh --no-build      # install existing pmbootstrap-built APKs
+./scripts/deploy.sh --no-restart    # install without restarting greetd
+./scripts/deploy.sh --status        # check phone/session status
+./scripts/deploy.sh --logs          # inspect recent Penumbra logs
+```
+
+The script targets `user@172.16.42.1` by default and uses normal SSH authentication. It does not use `sshpass`; SSH may prompt for a key passphrase and sudo may prompt on the phone.
 
 ---
 
