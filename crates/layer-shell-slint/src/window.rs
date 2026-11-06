@@ -1,13 +1,13 @@
 //! Implements [`slint::platform::WindowAdapter`] for native Wayland layer-shell surfaces.
 
 use log::{debug, error, trace};
-use slint::platform::software_renderer::SoftwareRenderer;
+use slint::platform::software_renderer::{RepaintBufferType, SoftwareRenderer};
 use slint::platform::{Renderer, WindowAdapter, WindowEvent};
 use slint::{PhysicalSize, Window};
 use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shm::slot::SlotPool;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use wayland_client::protocol::wl_shm::Format;
 use wayland_client::QueueHandle;
@@ -21,6 +21,8 @@ pub struct LayerWindow {
     window: Window,
     /// Software renderer generating ARGB8888 pixels.
     renderer: SoftwareRenderer,
+    framebuffer: RefCell<Vec<Argb8888Pixel>>,
+    framebuffer_size: Cell<PhysicalSize>,
     /// SCTK layer surface representing the native Wayland layer shell entity.
     layer_surface: LayerSurface,
     /// Current window dimensions in physical pixels.
@@ -56,7 +58,7 @@ impl LayerWindow {
         renderer_type: crate::RendererType,
         namespace: String,
     ) -> Rc<Self> {
-        let renderer = SoftwareRenderer::new();
+        let renderer = SoftwareRenderer::new_with_repaint_buffer_type(RepaintBufferType::ReusedBuffer);
         let initial_size = PhysicalSize::new(initial_width, initial_height);
         // Shells lay out at 1:1; panel scaling happens in the compositor.
         let scale_factor = std::env::var("PENUMBRA_SCALE_FACTOR")
@@ -73,6 +75,8 @@ impl LayerWindow {
             Self {
                 window,
                 renderer,
+                framebuffer: RefCell::new(Vec::new()),
+                framebuffer_size: Cell::new(PhysicalSize::new(0, 0)),
                 layer_surface,
                 size: Cell::new(initial_size),
                 scale_factor: Cell::new(scale_factor),
@@ -221,11 +225,23 @@ impl LayerWindow {
             )
         };
 
-        // Zero-fill buffer to ensure regions not painted by Slint remain fully transparent
-        pixels.fill(Argb8888Pixel::default());
-
-        // Render Slint UI elements into the Wayland shared memory buffer
-        self.renderer.render(pixels, width as usize);
+        // SHM slots may rotate while the compositor retains older buffers. Keep a
+        // separate complete frame for Slint's partial repainting, then copy it to
+        // the newly acquired slot without modifying any in-flight buffer.
+        let mut framebuffer = self.framebuffer.borrow_mut();
+        let size = self.size.get();
+        let resized = self.framebuffer_size.get() != size;
+        if resized {
+            framebuffer.clear();
+            framebuffer.resize(pixel_count, Argb8888Pixel::default());
+            self.framebuffer_size.set(size);
+            self.renderer.set_repaint_buffer_type(RepaintBufferType::NewBuffer);
+        }
+        self.renderer.render(&mut framebuffer[..], width as usize);
+        if resized {
+            self.renderer.set_repaint_buffer_type(RepaintBufferType::ReusedBuffer);
+        }
+        pixels.copy_from_slice(&framebuffer[..]);
 
         let wl_surface = self.layer_surface.wl_surface();
 
