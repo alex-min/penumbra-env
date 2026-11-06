@@ -61,6 +61,26 @@ can have side margins. This deployment change does not resize that
 canvas or establish compositor/rendering compatibility with the Adreno
 320; those require testing on the phone.
 
+### Reusing ARMv7 build work
+
+The local package keeps its caches under
+`/home/pmos/.cache/penumbra-env` inside the ARMv7 build chroot:
+
+- `cargo/`: downloaded crates and registry metadata.
+- `source/armv7/`: stable source paths, synchronized by content without
+  changing the timestamps of unchanged files.
+- `target/armv7/`: compiled dependencies, binaries and incremental state.
+
+These survive ordinary package cleanup and `--force` rebuilds. The
+workspace is built once with `penumbra-comp/native-drm` enabled. The first
+build after this cache change is still cold; subsequent changes should
+reuse dependencies and unchanged crates. Modified crates and their
+dependents still need compilation/linking, and APK packaging still runs.
+No build-time improvement has been measured yet. Removing the build
+chroot or these cache directories makes the next build cold again.
+`XDG_CACHE_HOME`, if set by the build environment, replaces the `.cache`
+base directory. See [Cargo's build cache documentation](https://doc.rust-lang.org/cargo/reference/build-cache.html).
+
 ## ARM64
 
 ARM64 deployment retains the Docker builder and raw release binaries:
