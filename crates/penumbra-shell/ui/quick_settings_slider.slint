@@ -880,21 +880,24 @@ export component QuickSettingsSlider inherits Rectangle {
         chassis-gesture-area := TouchArea {
             property <float> touch-start-x: 0.0;
             property <float> touch-start-y: 0.0;
+            property <float> last-screen-y: 0.0;
             property <bool> is-dragging-v: false;
 
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down) {
                     self.touch-start-x = self.mouse-x / 1px;
-                    self.touch-start-y = self.mouse-y / 1px;
+                    self.touch-start-y = (self.mouse-y + root.slide-offset-y) / 1px;
+                    self.last-screen-y = self.touch-start-y;
                     self.is-dragging-v = false;
                 } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
                     let dx = (self.mouse-x / 1px) - self.touch-start-x;
-                    let dy = (self.mouse-y / 1px) - self.touch-start-y;
+                    let screen-y = (self.mouse-y + root.slide-offset-y) / 1px;
+                    let dy = screen-y - self.touch-start-y;
                     if (self.is-dragging-v) {
                         if (dy < -20.0) {
                             root.fast-pull-up();
                         } else {
-                            root.drag-released(dy * 1px, 0.0);
+                            root.drag-released(root.slide-offset-y, 0.0);
                         }
                     } else if (Math.abs(dx) > 25.0 && Math.abs(dx) > Math.abs(dy) * 1.1) {
                         // Horizontal swipe between Notifications and Quick Settings
@@ -911,12 +914,14 @@ export component QuickSettingsSlider inherits Rectangle {
             }
             moved => {
                 if (self.pressed) {
-                    let dy = (self.mouse-y / 1px) - self.touch-start-y;
+                    let screen-y = (self.mouse-y + root.slide-offset-y) / 1px;
+                    let dy = screen-y - self.touch-start-y;
                     let dx = (self.mouse-x / 1px) - self.touch-start-x;
                     if (dy < -15.0 && Math.abs(dy) > Math.abs(dx)) {
                         self.is-dragging-v = true;
-                        root.drag-delta(dy * 1px);
+                        root.drag-delta((screen-y - self.last-screen-y) * 1px);
                     }
+                    self.last-screen-y = screen-y;
                 }
             }
         }
@@ -1479,14 +1484,17 @@ export component QuickSettingsSlider inherits Rectangle {
 
             TouchArea {
                 property <length> press-y: 0px;
+                property <length> last-screen-y: 0px;
                 property <bool> is-dragging: false;
 
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.down) {
-                        self.press-y = self.mouse-y;
+                        self.press-y = self.mouse-y + root.slide-offset-y;
+                        self.last-screen-y = self.press-y;
                         self.is-dragging = false;
                     } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) {
-                        let dy = self.mouse-y - self.press-y;
+                        let screen-y = self.mouse-y + root.slide-offset-y;
+                        let dy = screen-y - self.press-y;
                         if (self.is-dragging || dy < -8px) {
                             root.fast-pull-up();
                         } else {
@@ -1497,11 +1505,13 @@ export component QuickSettingsSlider inherits Rectangle {
                 }
                 moved => {
                     if (self.pressed) {
-                        let dy = self.mouse-y - self.press-y;
+                        let screen-y = self.mouse-y + root.slide-offset-y;
+                        let dy = screen-y - self.press-y;
                         if (dy < -6px) {
                             self.is-dragging = true;
-                            root.drag-delta(dy);
+                            root.drag-delta(screen-y - self.last-screen-y);
                         }
+                        self.last-screen-y = screen-y;
                     }
                 }
                 clicked => {

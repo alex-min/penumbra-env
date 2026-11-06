@@ -1228,20 +1228,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            // Drain loopback notifications even while the spring owns the shade.
+            // Otherwise a full queue can preserve an old "open" packet until after closing.
+            let mut latest = None;
+            if let Some(ref sock) = state_socket {
+                while let Some((state, _seq)) = sock.try_recv() {
+                    latest = Some(state);
+                }
+            }
             if is_animating_ipc.get() {
-                // If SystemUI's spring is currently animating the shade, don't let stale loopback packets cancel it
                 return;
             }
-
-            let state = if let Some(ref sock) = state_socket {
-                let mut latest = None;
-                while let Some((st, _seq)) = sock.try_recv() {
-                    latest = Some(st);
-                }
-                latest.unwrap_or_else(ShellState::load)
-            } else {
-                ShellState::load()
-            };
+            let state = latest.unwrap_or_else(ShellState::load);
 
             // Direct sync of lockscreen state from compositor
             if state.is_locked != last_known_locked_ipc.get() {
