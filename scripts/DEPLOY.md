@@ -55,11 +55,30 @@ reuse the existing package:
 ```
 
 The S4 display defaults are installed in `/etc/penumbra/session.conf`:
-1080×1920 physical pixels and shell scale 1.0. The compositor currently
-uses a fixed 412×915 logical canvas and fits it to the panel, so the S4
-can have side margins. This deployment change does not resize that
-canvas or establish compositor/rendering compatibility with the Adreno
-320; those require testing on the phone.
+1080×1920 physical pixels, a 515×915 logical canvas, and shell scale 1.0.
+The compositor and layer-shell clients use the configured logical width
+for rendering, app sizes, touch coordinates and external-display origins.
+This aspect ratio fills the S4 panel width using uniform scaling; it does
+not stretch the old 412-pixel-wide layout. The default remains 412×915
+when no device width is configured. The logical height remains 915.
+
+### UI verification after rebuilding
+
+Check that the home screen, apps, bars and keyboard span the display,
+then open the top shade and swipe upward from empty space and its bottom
+handle. Shade gestures now use screen coordinates and incremental motion,
+and state notifications are drained during its close animation.
+
+For the app drawer, compare dragging on an icon with dragging on empty
+space, then test kinetic scrolling in both directions. The launcher now
+refreshes task models and icons only when the window list changes. Its
+software rendering backend retains the previous pixel frame for
+[Slint partial repainting](https://docs.slint.dev/latest/docs/rust/slint/platform/software_renderer/enum.RepaintBufferType),
+copying complete frames to available Wayland SHM buffers and repainting
+fully after a resize. The desktop-shell supervisor waits for an external
+display rather than repeatedly launching on a phone-only session.
+These changes require on-device validation; no new frame-rate measurement
+or compilation was performed while preparing them.
 
 ### Reusing ARMv7 build work
 
