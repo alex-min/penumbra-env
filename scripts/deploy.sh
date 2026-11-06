@@ -212,7 +212,13 @@ cat > /etc/udev/rules.d/90-penumbra-backlight.rules <<'RULE'
 ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod 0664 /sys/class/backlight/%k/brightness"
 RULE
 udevadm control --reload-rules 2>/dev/null || true
-udevadm trigger --subsystem-match=backlight 2>/dev/null || true
+udevadm trigger --action=add --subsystem-match=backlight 2>/dev/null || true
+udevadm settle 2>/dev/null || true
+for brightness in /sys/class/backlight/*/brightness; do
+    [ -e "$brightness" ] || continue
+    chgrp video "$brightness"
+    chmod 0664 "$brightness"
+done
 for group in video input audio; do
     if ! id -nG "$login_user" | tr ' ' '\n' | grep -qx "$group"; then
         if command -v usermod >/dev/null 2>&1; then
