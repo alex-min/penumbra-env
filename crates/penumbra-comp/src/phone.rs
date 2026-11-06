@@ -311,6 +311,7 @@ impl ShellState {
 
         // Notify socket listeners (non-blocking, ignores ENOENT / ECONNREFUSED)
         if let Ok(sock) = std::os::unix::net::UnixDatagram::unbound() {
+            sock.set_nonblocking(true)?;
             let comp_sock = runtime_path(COMP_STATE_SOCK);
             let shell_sock = runtime_path(SHELL_STATE_SOCK);
             let _ = sock.send_to(&bytes, &comp_sock);
