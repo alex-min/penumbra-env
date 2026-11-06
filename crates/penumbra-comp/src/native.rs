@@ -50,7 +50,7 @@ use crate::{
     native_input::{self, InputState},
     phone::{
         self, resolve_app_icon_target, runtime_path, write_atomic, PhoneMode,
-        ShellState, APP_H, APP_Y, CARD_H, CARD_STEP, CARD_Y, OVERVIEW_SCALE, PHONE_H, PHONE_W,
+        ShellState, APP_H, APP_Y, CARD_H, CARD_STEP, CARD_Y, OVERVIEW_SCALE, PHONE_H, phone_width,
     },
     server::{
         cropped, send_frames_surface_tree, surface_elements, ClientState, PenumbraCompositor,
@@ -234,7 +234,7 @@ impl NativeState {
             external_list.push((discovered_conn.name.clone(), new_log_size));
             let layout = crate::outputs::compute_default_multi_display_layout(&external_list);
             let my_layout = layout.iter().find(|d| d.id == discovered_conn.name);
-            let out_pos = my_layout.map(|l| (l.position.x, l.position.y)).unwrap_or((PHONE_W, 0));
+            let out_pos = my_layout.map(|l| (l.position.x, l.position.y)).unwrap_or((phone_width(), 0));
 
             output_ext.change_current_state(
                 Some(mode_ext),
@@ -320,7 +320,7 @@ fn app_elements(
         return Vec::new();
     }
     let mut elements = Vec::new();
-    let phone_clip = canvas.rect(0, 0, PHONE_W, PHONE_H);
+    let phone_clip = canvas.rect(0, 0, phone_width(), PHONE_H);
     let switch_dx = server.nav_switch_dx;
 
     if server.nav_switch_active || server.nav_switch_spring.is_some() || switch_dx.abs() > 0.5 {
@@ -328,12 +328,12 @@ fn app_elements(
         let cur_scale = if server.nav_switch_spring.is_none() && !server.nav_switch_active {
             1.0
         } else {
-            (1.0 - (switch_dx.abs() / (PHONE_W as f64 * 4.0))).clamp(0.94, 1.0)
+            (1.0 - (switch_dx.abs() / (phone_width() as f64 * 4.0))).clamp(0.94, 1.0)
         };
-        let cur_w = (PHONE_W as f64 * cur_scale).round() as i32;
+        let cur_w = (phone_width() as f64 * cur_scale).round() as i32;
         let cur_h = (APP_H as f64 * cur_scale).round() as i32;
         let cur_y = APP_Y + (APP_H - cur_h) / 2;
-        let cur_x = (switch_dx + ((PHONE_W - cur_w) / 2) as f64).round() as i32;
+        let cur_x = (switch_dx + ((phone_width() - cur_w) / 2) as f64).round() as i32;
         let draw_scale = cur_scale * canvas.scale;
 
         if let Some(cur_surface) = server.active_phone_surface() {
@@ -407,10 +407,10 @@ fn app_elements(
             let (target_icon_x, target_icon_y) = resolve_app_icon_target(&active_app_id);
             let t = nav_progress.clamp(0.0, 1.0);
             let scale_factor = compute_home_collapse_scale(t);
-            let w = (PHONE_W as f64 * scale_factor).round() as i32;
+            let w = (phone_width() as f64 * scale_factor).round() as i32;
             let h = (APP_H as f64 * scale_factor).round() as i32;
 
-            let initial_cx = (PHONE_W as f64) / 2.0;
+            let initial_cx = (phone_width() as f64) / 2.0;
             let initial_cy = (APP_Y as f64) + (APP_H as f64) / 2.0;
             let cx = initial_cx * (1.0 - t) + (target_icon_x as f64) * t;
             let cy = initial_cy * (1.0 - t) + (target_icon_y as f64) * t;
@@ -435,9 +435,9 @@ fn app_elements(
         } else {
             // Active window scaling down to card position during gesture pull-up
             let scale_factor = penumbra_gestures::compute_window_scale(nav_progress);
-            let w = (PHONE_W as f64 * scale_factor).round() as i32;
+            let w = (phone_width() as f64 * scale_factor).round() as i32;
             let h = (APP_H as f64 * scale_factor).round() as i32;
-            let x = ((PHONE_W - w) / 2).max(0);
+            let x = ((phone_width() - w) / 2).max(0);
             let target_y = ((PHONE_H - CARD_H) / 2) as f64;
             let y = (APP_Y as f64 * (1.0 - nav_progress) + target_y * nav_progress).round() as i32;
 
@@ -463,7 +463,7 @@ fn app_elements(
                 canvas.scale,
             ),
             canvas.scale,
-            canvas.rect(0, APP_Y, PHONE_W, APP_H),
+            canvas.rect(0, APP_Y, phone_width(), APP_H),
         ));
     }
     elements
@@ -526,14 +526,14 @@ fn overview_elements(
     {
         return (cards, None);
     }
-    let phone_clip = canvas.rect(0, 0, PHONE_W, PHONE_H);
+    let phone_clip = canvas.rect(0, 0, phone_width(), PHONE_H);
     let (scale, base_y) = compute_carousel_transform(server);
     let card_scale = scale * canvas.scale;
-    let w = (PHONE_W as f64 * scale).round() as i32;
+    let w = (phone_width() as f64 * scale).round() as i32;
     let h = (APP_H as f64 * scale).round() as i32;
     let step = ((CARD_STEP as f64) * (scale / OVERVIEW_SCALE)).round() as i32;
 
-    let center_x = ((PHONE_W - w) / 2) as f64;
+    let center_x = ((phone_width() - w) / 2) as f64;
 
     let is_expanding_to_fullscreen = server.shell_state.mode == PhoneMode::Overview
         && ((server.nav_gesture_active && server.nav_gesture_dy > 0.0)
@@ -565,7 +565,7 @@ fn overview_elements(
             base_y
         };
 
-        if x + w <= 0 || x >= PHONE_W {
+        if x + w <= 0 || x >= phone_width() {
             continue;
         }
         let Some(toplevel) = task.window.toplevel() else {
@@ -588,9 +588,9 @@ fn overview_elements(
         if let Some(task) = server.phone_tasks.get(server.shell_state.overview_index) {
             if let Some(toplevel) = task.window.toplevel() {
                 let expand_scale = scale * (1.0 - p_expand) + 1.0 * p_expand;
-                let ew = (PHONE_W as f64 * expand_scale).round() as i32;
+                let ew = (phone_width() as f64 * expand_scale).round() as i32;
                 let eh = (APP_H as f64 * expand_scale).round() as i32;
-                let ex = ((PHONE_W - ew) / 2).max(0);
+                let ex = ((phone_width() - ew) / 2).max(0);
                 let ey = (base_y as f64 * (1.0 - p_expand) + APP_Y as f64 * p_expand).round() as i32;
                 let draw_scale = expand_scale * canvas.scale;
 
@@ -651,7 +651,7 @@ fn render_frame(state: &mut NativeState, buffer: &mut Dmabuf) -> Result<(), Box<
     let scrim: Vec<smithay::backend::renderer::element::solid::SolidColorRenderElement> = if server.shell_state.mode == PhoneMode::Overview {
         let scrim_alpha = 0.22f32;
         let scrim_buf = smithay::backend::renderer::element::solid::SolidColorBuffer::new(
-            (PHONE_W, PHONE_H),
+            (phone_width(), PHONE_H),
             Color32F::new(0.0431, 0.0392, 0.0549, scrim_alpha),
         );
         smithay::backend::renderer::element::AsRenderElements::<GlesRenderer>::render_elements(
@@ -864,7 +864,7 @@ fn render_external_frame(
     let output_geo = server
         .space
         .output_geometry(&ext.output)
-        .unwrap_or_else(|| Rectangle::new((PHONE_W, 0).into(), (width as i32, height as i32).into()));
+        .unwrap_or_else(|| Rectangle::new((phone_width(), 0).into(), (width as i32, height as i32).into()));
 
     // 1. Collect desktop elements before binding frame
     let background = layer_elements_for_output(renderer, &ext.output, Layer::Background);
@@ -1074,7 +1074,7 @@ pub fn run(_compositor: &mut PenumbraCompositor) -> Result<(), Box<dyn Error>> {
     // Output A advertises the logical phone canvas so layer-shell arrangement matches the design
     // (nav bar at y 883, full-width chrome). The panel itself keeps its DRM mode for scanout.
     let mode_a = Mode {
-        size: (PHONE_W, PHONE_H).into(),
+        size: (phone_width(), PHONE_H).into(),
         refresh: mode.vrefresh() as i32 * 1000,
     };
     output_a.create_global::<PenumbraServerState>(&dh);
@@ -1126,7 +1126,7 @@ pub fn run(_compositor: &mut PenumbraCompositor) -> Result<(), Box<dyn Error>> {
         state_socket: phone::StateSocket::bind(&runtime_path(phone::COMP_STATE_SOCK)).ok(),
         overview_scroll: 0.0,
         last_tasks_published: String::from("\u{0}"),
-        phone_logical_size: (phone::PHONE_W, phone::PHONE_H),
+        phone_logical_size: (phone::phone_width(), phone::PHONE_H),
         screen_blanked: false,
         saved_brightness: 2500,
         nav_gesture_active: false,
@@ -1146,7 +1146,7 @@ pub fn run(_compositor: &mut PenumbraCompositor) -> Result<(), Box<dyn Error>> {
         blurred_wallpaper: {
             let cache = crate::wallpaper_blur::BlurredWallpaperCache::load_and_blur(
                 None,
-                phone::PHONE_W,
+                phone::phone_width(),
                 phone::PHONE_H,
             );
             Some(cache)
@@ -1154,7 +1154,7 @@ pub fn run(_compositor: &mut PenumbraCompositor) -> Result<(), Box<dyn Error>> {
         blurred_wallpaper_buffer: {
             let cache = crate::wallpaper_blur::BlurredWallpaperCache::load_and_blur(
                 None,
-                phone::PHONE_W,
+                phone::phone_width(),
                 phone::PHONE_H,
             );
             Some(cache.to_render_buffer())
@@ -1216,7 +1216,7 @@ pub fn run(_compositor: &mut PenumbraCompositor) -> Result<(), Box<dyn Error>> {
     // Shell surfaces are laid out on the fixed logical canvas; the panel is a uniform scale of it.
     let canvas = Canvas::new(
         (mode.size().0 as u32, mode.size().1 as u32),
-        (PHONE_W as u32, PHONE_H as u32),
+        (phone_width() as u32, PHONE_H as u32),
     );
     let panel = (mode.size().0 as i32, mode.size().1 as i32);
     let now = Instant::now();

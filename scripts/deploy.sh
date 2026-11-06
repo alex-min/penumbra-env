@@ -202,6 +202,8 @@ if [ "$target" = armv7 ]; then
     cat > /etc/penumbra/session.conf <<'CONFIG'
 export PENUMBRA_OUTPUT_WIDTH=1080
 export PENUMBRA_OUTPUT_HEIGHT=1920
+export PENUMBRA_LOGICAL_WIDTH=515
+export PENUMBRA_LOGICAL_HEIGHT=915
 export PENUMBRA_SCALE_FACTOR=1.0
 CONFIG
 fi

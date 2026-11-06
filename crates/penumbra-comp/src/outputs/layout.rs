@@ -35,12 +35,12 @@ pub fn compute_default_multi_display_layout(
     result.push(LayoutDisplay {
         id: "Phone-DSI-1".to_string(),
         is_phone: true,
-        size: (PHONE_CANVAS_WIDTH, PHONE_CANVAS_HEIGHT).into(),
+        size: (crate::phone::phone_width(), PHONE_CANVAS_HEIGHT).into(),
         position: (0, 0).into(),
     });
 
     // 2. Arrange N external desktop displays horizontally to the right
-    let mut current_x = PHONE_CANVAS_WIDTH;
+    let mut current_x = crate::phone::phone_width();
     for (id, size) in external_displays {
         result.push(LayoutDisplay {
             id: id.clone(),

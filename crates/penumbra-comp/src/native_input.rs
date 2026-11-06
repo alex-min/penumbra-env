@@ -28,7 +28,7 @@ use smithay::{
 
 use crate::{
     native::Canvas,
-    phone::{card_transform, CARD_STEP, NAV_BAR_Y, PHONE_H, PHONE_W, STATUS_BAR_H, PhoneMode},
+    phone::{card_transform, CARD_STEP, NAV_BAR_Y, PHONE_H, phone_width, STATUS_BAR_H, PhoneMode},
     server::PenumbraServerState,
 };
 
@@ -141,7 +141,7 @@ impl InputState {
 
 fn clamp_to_canvas(x: f64, y: f64) -> Point<f64, Logical> {
     (
-        x.clamp(0.0, (PHONE_W - 1) as f64),
+        x.clamp(0.0, (phone_width() - 1) as f64),
         y.clamp(0.0, (PHONE_H - 1) as f64),
     )
         .into()
@@ -325,7 +325,7 @@ pub(crate) fn handle(
             }
             if event.state() == ButtonState::Pressed {
                 let pos = server.pointer_location;
-                if pos.x >= PHONE_W as f64 {
+                if pos.x >= phone_width() as f64 {
                     let clicked_window = server.space.element_under(pos).map(|(w, _)| w.clone());
                     if let Some(window) = clicked_window {
                         if server.root_shell.as_ref() != Some(&window) && !server.is_phone_task(&window) {
@@ -403,7 +403,7 @@ pub(crate) fn handle(
             // Vertical zone: 35.0..873.0 (excluding status bar top and nav bar bottom).
             const EDGE_ZONE: f64 = 28.0;
             let is_left_edge = pos.x <= EDGE_ZONE;
-            let is_right_edge = pos.x >= (PHONE_W as f64 - EDGE_ZONE);
+            let is_right_edge = pos.x >= (phone_width() as f64 - EDGE_ZONE);
             let in_vertical_zone = pos.y >= 35.0 && pos.y <= (NAV_BAR_Y as f64 - 10.0);
 
             if !server.shell_state.is_locked && (is_left_edge || is_right_edge) && in_vertical_zone && input.edge_gesture.is_none() {
@@ -486,7 +486,7 @@ pub(crate) fn handle(
             // Right half (x >= PHONE_W / 2 = 206px) -> Quick Settings screen (is_full_qs = true)
             let is_top_zone = pos.y <= (STATUS_BAR_H as f64 + 18.0);
             if !server.shell_state.is_locked && is_top_zone && !server.shell_state.drawer_open && input.shade_tracker.is_none() {
-                let is_qs = pos.x >= (PHONE_W as f64) / 2.0;
+                let is_qs = pos.x >= (phone_width() as f64) / 2.0;
                 tracing::info!(x = pos.x, y = pos.y, is_qs, "Top edge shade drag started -> partition split");
                 let mut tracker = penumbra_gestures::VelocityTracker::new(0.8);
                 tracker.start(pos.x, pos.y, std::time::Duration::ZERO);
@@ -845,10 +845,10 @@ pub(crate) fn handle(
                     let switch_dx = server.nav_switch_dx;
                     if server.nav_switch_active || (switch_dx.abs() > 20.0 && switch_dx.abs() > server.nav_gesture_dy.abs() * 1.1) {
                         server.nav_switch_active = false;
-                        let target = penumbra_gestures::arbitrate_horizontal_release(switch_dx, vx, PHONE_W as f64);
+                        let target = penumbra_gestures::arbitrate_horizontal_release(switch_dx, vx, phone_width() as f64);
                         let target_dx = match target {
-                            penumbra_gestures::NavigationTarget::NextApp => -(PHONE_W as f64),
-                            penumbra_gestures::NavigationTarget::PrevApp => PHONE_W as f64,
+                            penumbra_gestures::NavigationTarget::NextApp => -(phone_width() as f64),
+                            penumbra_gestures::NavigationTarget::PrevApp => phone_width() as f64,
                             _ => 0.0,
                         };
                         let mut spring = penumbra_gestures::SpringSolver::horizontal_switch();

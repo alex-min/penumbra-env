@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::phone::{PHONE_H, PHONE_W};
+use crate::phone::{PHONE_H, phone_width};
 
 /// Physical output role in the Penumbra convergence model.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -69,7 +69,7 @@ impl OutputConfig {
         Self {
             role: OutputRole::PhoneDsi,
             name: "DSI-1 (Pixel Mobile)".to_string(),
-            width: PHONE_W,
+            width: phone_width(),
             height: PHONE_H,
             refresh_rate_mhz: 120_000,
             scale: 1.0,

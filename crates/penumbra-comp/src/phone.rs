@@ -15,6 +15,19 @@ use std::path::PathBuf;
 /// Logical mobile UI canvas used by the shell and app layout (phone design size).
 /// The native backend scales this canvas onto the physical panel.
 pub const PHONE_W: i32 = 412;
+
+/// Configured shell width, shared with the layer-shell clients through the session environment.
+pub fn phone_width() -> i32 {
+    static WIDTH: std::sync::OnceLock<i32> = std::sync::OnceLock::new();
+    *WIDTH.get_or_init(|| {
+        std::env::var("PENUMBRA_LOGICAL_WIDTH")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .filter(|width| (320..=2048).contains(width))
+            .unwrap_or(PHONE_W)
+    })
+}
+
 /// Logical mobile UI canvas height.
 pub const PHONE_H: i32 = 915;
 /// Physical panel size used when no compositor-provided mode is available.
@@ -397,7 +410,7 @@ pub fn parse_commands(text: &str) -> Vec<ShellCommand> {
 /// Left edge of overview card `index` given the (animated) carousel scroll.
 /// Older tasks (higher index) sit to the left of the active one, like Android.
 pub fn card_x(index: usize, scroll: f64) -> i32 {
-    let center = ((PHONE_W - CARD_W) / 2) as f64;
+    let center = ((phone_width() - CARD_W) / 2) as f64;
     (center - (index as f64 - scroll) * CARD_STEP as f64).round() as i32
 }
 
@@ -413,7 +426,7 @@ pub fn card_transform(
     let scale = OVERVIEW_SCALE;
     let w = CARD_W;
     let h = CARD_H;
-    let base_centered_x = ((PHONE_W - w) / 2) as f64;
+    let base_centered_x = ((phone_width() - w) / 2) as f64;
     let target_x = base_centered_x - (dist * CARD_STEP as f64);
     let x = target_x.round() as i32;
     let dy = if index == active_index {
@@ -585,7 +598,7 @@ mod tests {
 
     #[test]
     fn overview_cards_layout() {
-        let center = ((PHONE_W - CARD_W) / 2) as f64;
+        let center = ((phone_width() - CARD_W) / 2) as f64;
         let expected_center = center.round() as i32;
         assert_eq!(card_x(0, 0.0), expected_center);
         assert_eq!(card_x(1, 0.0), expected_center - CARD_STEP);

@@ -83,7 +83,7 @@ use crate::args::CliArgs;
 use crate::phone::{
     self, card_transform, parse_commands, resolve_app_icon_target, runtime_path, task_line,
     write_atomic, PhoneMode, ShellCommand, ShellState, APP_H, APP_Y, CARD_H, CARD_STEP, NAV_BAR_H,
-    NAV_BAR_Y, PHONE_H, PHONE_W, STATUS_BAR_H,
+    NAV_BAR_Y, PHONE_H, phone_width, STATUS_BAR_H,
 };
 use crate::policy::{AsymmetricOutputManager, OutputRole};
 use penumbra_gestures::{
@@ -262,7 +262,7 @@ impl PenumbraServerState {
             self.next_task_id += 1;
             if let Some(toplevel) = window.toplevel() {
                 toplevel.with_pending_state(|state| {
-                    state.size = Some((PHONE_W, APP_H).into());
+                    state.size = Some((phone_width(), APP_H).into());
                 });
                 toplevel.send_configure();
             }
@@ -292,11 +292,11 @@ impl PenumbraServerState {
             let target_geo = self
                 .space
                 .output_geometry(&target_output)
-                .unwrap_or_else(|| Rectangle::new((412, 0).into(), (1920, 1080).into()));
+                .unwrap_or_else(|| Rectangle::new((phone_width(), 0).into(), (1920, 1080).into()));
             let unplugged_geo = self
                 .space
                 .output_geometry(unplugged_output)
-                .unwrap_or_else(|| Rectangle::new((412, 0).into(), (1920, 1080).into()));
+                .unwrap_or_else(|| Rectangle::new((phone_width(), 0).into(), (1920, 1080).into()));
 
             let mut windows_to_move = Vec::new();
             for window in self.space.elements() {
@@ -440,7 +440,7 @@ impl PenumbraServerState {
     pub fn global_layout_bounds(&self) -> Rectangle<i32, smithay::utils::Logical> {
         let mut min_x = 0;
         let mut min_y = 0;
-        let mut max_x = PHONE_W;
+        let mut max_x = phone_width();
         let mut max_y = PHONE_H;
 
         for output in self.external_outputs.values() {
@@ -528,7 +528,7 @@ impl PenumbraServerState {
         &self,
         pos: Point<f64, smithay::utils::Logical>,
     ) -> Option<(WlSurface, Point<f64, smithay::utils::Logical>)> {
-        if pos.x < PHONE_W as f64 {
+        if pos.x < phone_width() as f64 {
             self.phone_focus_under(pos)
         } else {
             self.desktop_focus_under(pos)
@@ -540,7 +540,7 @@ impl PenumbraServerState {
         let win_size = window.geometry().size;
         let center_x = target_loc.0 + win_size.w / 2;
 
-        if center_x < PHONE_W {
+        if center_x < phone_width() {
             // Dragged across boundary into Phone Screen
             if !self.is_phone_task(window) {
                 tracing::info!("Dragging window across boundary into Phone mobile task stack");
@@ -550,7 +550,7 @@ impl PenumbraServerState {
                     toplevel.with_pending_state(|state| {
                         state.states.set(xdg_toplevel::State::Activated);
                         state.states.set(xdg_toplevel::State::Maximized);
-                        state.size = Some((PHONE_W, APP_H).into());
+                        state.size = Some((phone_width(), APP_H).into());
                     });
                     toplevel.send_configure();
                 }
@@ -718,7 +718,7 @@ impl PenumbraServerState {
                         toplevel.with_pending_state(|state| {
                             state.states.set(xdg_toplevel::State::Activated);
                             state.states.set(xdg_toplevel::State::Maximized);
-                            state.size = Some((PHONE_W, APP_H).into());
+                            state.size = Some((phone_width(), APP_H).into());
                         });
                         toplevel.send_configure();
                         let surf = toplevel.wl_surface().clone();
@@ -761,10 +761,10 @@ impl PenumbraServerState {
                     self.nav_switch_active = false;
                     let dx = new_state.nav_gesture_dx;
                     let vx = new_state.nav_gesture_vx;
-                    let target = arbitrate_horizontal_release(dx, vx, PHONE_W as f64);
+                    let target = arbitrate_horizontal_release(dx, vx, phone_width() as f64);
                     let target_dx = match target {
-                        NavigationTarget::NextApp => -(PHONE_W as f64),
-                        NavigationTarget::PrevApp => PHONE_W as f64,
+                        NavigationTarget::NextApp => -(phone_width() as f64),
+                        NavigationTarget::PrevApp => phone_width() as f64,
                         _ => 0.0,
                     };
                     let mut spring = SpringSolver::horizontal_switch();
@@ -935,7 +935,7 @@ impl PenumbraServerState {
                     toplevel.with_pending_state(|state| {
                         state.states.set(xdg_toplevel::State::Activated);
                         state.states.set(xdg_toplevel::State::Maximized);
-                        state.size = Some((PHONE_W, APP_H).into());
+                        state.size = Some((phone_width(), APP_H).into());
                     });
                     toplevel.send_configure();
                     let surf = toplevel.wl_surface().clone();
@@ -1159,7 +1159,7 @@ impl XdgShellHandler for PenumbraServerState {
             let shell_width = if self.is_convergence_active {
                 1692
             } else {
-                412
+                phone_width()
             };
             info!(
                 "Routing Penumbra Shell root surface: {}x915 across canvas",
@@ -1191,13 +1191,13 @@ impl XdgShellHandler for PenumbraServerState {
         if target_output == "phone" || !self.is_convergence_active {
             info!(
                 "Routing application to Output A [Phone Screen]: {}x{} at (0, {}) inside system insets",
-                PHONE_W, APP_H, APP_Y
+                phone_width(), APP_H, APP_Y
             );
             surface.with_pending_state(|state| {
                 state.states.set(xdg_toplevel::State::Activated);
                 // Maximized makes GTK/Qt drop CSD shadows so content fills the inset exactly.
                 state.states.set(xdg_toplevel::State::Maximized);
-                state.size = Some((PHONE_W, APP_H).into());
+                state.size = Some((phone_width(), APP_H).into());
             });
             surface.send_configure();
 
@@ -1250,7 +1250,7 @@ impl XdgShellHandler for PenumbraServerState {
                 win_h = win_h.min(max_h);
 
                 let app_idx = window_count.saturating_sub(1);
-                offset_x = 412 + usable_zone.loc.x + 40 + ((app_idx as i32 * 35) % 300);
+                offset_x = phone_width() + usable_zone.loc.x + 40 + ((app_idx as i32 * 35) % 300);
                 offset_y = usable_zone.loc.y + 30 + ((app_idx as i32 * 30) % 150);
             }
 
@@ -1585,7 +1585,7 @@ impl PenumbraCompositor {
             .output_manager
             .output_config(&OutputRole::PhoneDsi)
             .unwrap();
-        assert_eq!(dsi_config.width, PHONE_W);
+        assert_eq!(dsi_config.width, phone_width());
         assert_eq!(dsi_config.height, PHONE_H);
         assert!(dsi_config.enforces_gestures);
 
@@ -1668,7 +1668,7 @@ impl PenumbraCompositor {
         );
         let _global_a = output_a.create_global::<PenumbraServerState>(&dh);
         let mode_a = Mode {
-            size: (412, 915).into(),
+            size: (phone_width(), 915).into(),
             refresh: 120_000,
         };
         output_a.set_preferred(mode_a);
@@ -1702,9 +1702,9 @@ impl PenumbraCompositor {
                 Some(mode_b),
                 Some(Transform::Normal),
                 Some(Scale::Integer(1)),
-                Some((412, 0).into()),
+                Some((phone_width(), 0).into()),
             );
-            space.map_output(&output_b, (412, 0));
+            space.map_output(&output_b, (phone_width(), 0));
             info!("Mapped Output B: HDMI-A-1 (1280x720 @ (412, 0))");
             Some(output_b)
         } else {
@@ -1807,9 +1807,9 @@ impl PenumbraCompositor {
         // Output B: 1280x720
         // Combined root canvas: (412 + 1280) x 915 = 1692 x 915
         let canvas_w = if self.args.convergence {
-            412 + 1280
+            phone_width() + 1280
         } else {
-            412
+            phone_width()
         };
         let canvas_h = 915;
 
@@ -1874,7 +1874,7 @@ impl PenumbraCompositor {
                         state.pointer_location = pos;
 
                         // Output A (phone): inset-aware routing, independent of space z-order.
-                        if pos.x < PHONE_W as f64 {
+                        if pos.x < phone_width() as f64 {
                             let focus = state.phone_focus_under(pos);
                             let kb_target =
                                 if state.phone_app_visible() && !state.shell_state.drawer_open {
@@ -1902,10 +1902,10 @@ impl PenumbraCompositor {
 
                         // Check layer surfaces on Output B (Overlay, Top) first
                         let layer_under = if let Some(ref out_b) = state.output_b {
-                            if pos.x >= 412.0 {
+                            if pos.x >= phone_width() as f64 {
                                 let map_b = layer_map_for_output(out_b);
                                 let rel_p: Point<f64, smithay::utils::Logical> =
-                                    (pos.x - 412.0, pos.y).into();
+                                    (pos.x - phone_width() as f64, pos.y).into();
                                 map_b
                                     .layer_under(Layer::Overlay, rel_p)
                                     .or_else(|| map_b.layer_under(Layer::Top, rel_p))
@@ -1924,7 +1924,7 @@ impl PenumbraCompositor {
 
                         if let Some((surf, geo)) = layer_under {
                             let loc: Point<f64, smithay::utils::Logical> =
-                                ((412 + geo.loc.x) as f64, geo.loc.y as f64).into();
+                                ((phone_width() + geo.loc.x) as f64, geo.loc.y as f64).into();
                             pointer.motion(
                                 &mut state,
                                 Some((surf.clone(), loc)),
@@ -1956,10 +1956,10 @@ impl PenumbraCompositor {
                         } else {
                             // Check bottom/background layers
                             let bg_layer = if let Some(ref out_b) = state.output_b {
-                                if pos.x >= 412.0 {
+                                if pos.x >= phone_width() as f64 {
                                     let map_b = layer_map_for_output(out_b);
                                     let rel_p: Point<f64, smithay::utils::Logical> =
-                                        (pos.x - 412.0, pos.y).into();
+                                        (pos.x - phone_width() as f64, pos.y).into();
                                     map_b
                                         .layer_under(Layer::Bottom, rel_p)
                                         .or_else(|| map_b.layer_under(Layer::Background, rel_p))
@@ -1978,7 +1978,7 @@ impl PenumbraCompositor {
 
                             if let Some((surf, geo)) = bg_layer {
                                 let loc: Point<f64, smithay::utils::Logical> =
-                                    ((412 + geo.loc.x) as f64, geo.loc.y as f64).into();
+                                    ((phone_width() + geo.loc.x) as f64, geo.loc.y as f64).into();
                                 pointer.motion(
                                     &mut state,
                                     Some((surf.clone(), loc)),
@@ -2008,10 +2008,10 @@ impl PenumbraCompositor {
 
                         // If not clicking on top layer surface, check window raise
                         let is_on_top_layer = if let Some(ref out_b) = state.output_b {
-                            if state.pointer_location.x >= 412.0 {
+                            if state.pointer_location.x >= phone_width() as f64 {
                                 let map_b = layer_map_for_output(out_b);
                                 let rel_p: Point<f64, smithay::utils::Logical> =
-                                    (state.pointer_location.x - 412.0, state.pointer_location.y)
+                                    (state.pointer_location.x - phone_width() as f64, state.pointer_location.y)
                                         .into();
                                 map_b
                                     .layer_under(Layer::Overlay, rel_p)
@@ -2024,7 +2024,7 @@ impl PenumbraCompositor {
                             false
                         };
 
-                        if !is_on_top_layer && state.pointer_location.x < PHONE_W as f64 && state.shell_state.mode == PhoneMode::Overview {
+                        if !is_on_top_layer && state.pointer_location.x < phone_width() as f64 && state.shell_state.mode == PhoneMode::Overview {
                             if event.state() == smithay::backend::input::ButtonState::Released {
                                 let px = state.pointer_location.x;
                                 let py = state.pointer_location.y;
@@ -2055,7 +2055,7 @@ impl PenumbraCompositor {
                             }
                         }
 
-                        if !is_on_top_layer && state.pointer_location.x >= PHONE_W as f64 {
+                        if !is_on_top_layer && state.pointer_location.x >= phone_width() as f64 {
                             let clicked_window = state
                                 .space
                                 .element_under(state.pointer_location)
@@ -2082,7 +2082,7 @@ impl PenumbraCompositor {
                         let horizontal_amount = event.amount(Axis::Horizontal).unwrap_or(0.0);
                         let vertical_amount = event.amount(Axis::Vertical).unwrap_or(0.0);
 
-                        if state.pointer_location.x < PHONE_W as f64 && state.shell_state.mode == PhoneMode::Overview {
+                        if state.pointer_location.x < phone_width() as f64 && state.shell_state.mode == PhoneMode::Overview {
                             let amount = if horizontal_amount.abs() > vertical_amount.abs() {
                                 horizontal_amount
                             } else {
@@ -2227,7 +2227,7 @@ impl PenumbraCompositor {
                     bg_elements.extend(render_layer_elements(
                         renderer,
                         out_b,
-                        412,
+                        phone_width(),
                         Layer::Background,
                     ));
                 }
@@ -2238,13 +2238,13 @@ impl PenumbraCompositor {
                     bottom_elements.extend(render_layer_elements(
                         renderer,
                         out_b,
-                        412,
+                        phone_width(),
                         Layer::Bottom,
                     ));
                 }
 
                 let root_surface = state.root_surface();
-                let phone_rect = phys_rect(0, 0, PHONE_W, PHONE_H);
+                let phone_rect = phys_rect(0, 0, phone_width(), PHONE_H);
                 let drawer_open = state.shell_state.drawer_open;
 
                 // Phone Layer 0: shell base (home screen + Output B desktop UI) stationary
@@ -2287,7 +2287,7 @@ impl PenumbraCompositor {
                     let scrim_alpha = max_scrim as f32;
                     if scrim_alpha > 0.001 {
                         let scrim_buf = smithay::backend::renderer::element::solid::SolidColorBuffer::new(
-                            (PHONE_W, PHONE_H),
+                            (phone_width(), PHONE_H),
                             Color32F::new(0.0431, 0.0392, 0.0549, scrim_alpha),
                         );
                         scrim_elements = smithay::backend::renderer::element::AsRenderElements::<GlesRenderer>::render_elements(
@@ -2309,12 +2309,12 @@ impl PenumbraCompositor {
                         let cur_scale = if state.nav_switch_spring.is_none() && !state.nav_switch_active {
                             1.0
                         } else {
-                            (1.0 - (switch_dx.abs() / (PHONE_W as f64 * 4.0))).clamp(0.94, 1.0)
+                            (1.0 - (switch_dx.abs() / (phone_width() as f64 * 4.0))).clamp(0.94, 1.0)
                         };
-                        let cur_w = (PHONE_W as f64 * cur_scale).round() as i32;
+                        let cur_w = (phone_width() as f64 * cur_scale).round() as i32;
                         let cur_h = (APP_H as f64 * cur_scale).round() as i32;
                         let cur_y = APP_Y + (APP_H - cur_h) / 2;
-                        let cur_x = (switch_dx + ((PHONE_W - cur_w) / 2) as f64).round() as i32;
+                        let cur_x = (switch_dx + ((phone_width() - cur_w) / 2) as f64).round() as i32;
 
                         if let Some(cur_surface) = state.active_phone_surface() {
                             let rect = phys_rect(cur_x, cur_y, cur_w, cur_h);
@@ -2367,10 +2367,10 @@ impl PenumbraCompositor {
                                 let (target_icon_x, target_icon_y) = resolve_app_icon_target(&active_app_id);
                                 let t = nav_progress.clamp(0.0, 1.0);
                                 let scale = compute_home_collapse_scale(t);
-                                let w = (PHONE_W as f64 * scale).round() as i32;
+                                let w = (phone_width() as f64 * scale).round() as i32;
                                 let h = (APP_H as f64 * scale).round() as i32;
 
-                                let initial_cx = (PHONE_W as f64) / 2.0;
+                                let initial_cx = (phone_width() as f64) / 2.0;
                                 let initial_cy = (APP_Y as f64) + (APP_H as f64) / 2.0;
                                 let cx = initial_cx * (1.0 - t) + (target_icon_x as f64) * t;
                                 let cy = initial_cy * (1.0 - t) + (target_icon_y as f64) * t;
@@ -2388,9 +2388,9 @@ impl PenumbraCompositor {
                             } else {
                                 // Overview card transform: scale to 0.68, center at y = 172
                                 let scale = compute_window_scale(nav_progress);
-                                let w = (PHONE_W as f64 * scale).round() as i32;
+                                let w = (phone_width() as f64 * scale).round() as i32;
                                 let h = (APP_H as f64 * scale).round() as i32;
-                                let x = ((PHONE_W - w) / 2).max(0);
+                                let x = ((phone_width() - w) / 2).max(0);
                                 let target_y = ((PHONE_H - CARD_H) / 2) as f64;
                                 let y = (APP_Y as f64 * (1.0 - nav_progress) + target_y * nav_progress).round() as i32;
                                 let app_rect = phys_rect(x, y, w, h);
@@ -2425,7 +2425,7 @@ impl PenumbraCompositor {
                             }
                         }
                     } else if let Some(surface) = state.active_phone_surface() {
-                        let app_rect = phys_rect(0, APP_Y, PHONE_W, APP_H);
+                        let app_rect = phys_rect(0, APP_Y, phone_width(), APP_H);
                         app_elements = cropped(
                             surface_elements(renderer, &surface, (0, APP_Y), 1.0),
                             1.0,
@@ -2444,7 +2444,7 @@ impl PenumbraCompositor {
                             state.shell_state.overview_index,
                             state.shell_state.active_card_dy,
                         );
-                        if x + w <= 0 || x >= PHONE_W {
+                        if x + w <= 0 || x >= phone_width() {
                             continue;
                         }
                         let Some(toplevel) = task.window.toplevel() else {
@@ -2467,8 +2467,8 @@ impl PenumbraCompositor {
                 } else if state.phone_app_visible() || state.shell_state.mode == PhoneMode::Overview
                 {
                     vec![
-                        phys_rect(0, 0, PHONE_W, STATUS_BAR_H),
-                        phys_rect(0, NAV_BAR_Y, PHONE_W, NAV_BAR_H),
+                        phys_rect(0, 0, phone_width(), STATUS_BAR_H),
+                        phys_rect(0, NAV_BAR_Y, phone_width(), NAV_BAR_H),
                     ]
                 } else {
                     Vec::new()
@@ -2484,7 +2484,7 @@ impl PenumbraCompositor {
                 let mut top_elements =
                     render_layer_elements(renderer, &state.output_a, 0, Layer::Top);
                 if let Some(ref out_b) = state.output_b {
-                    top_elements.extend(render_layer_elements(renderer, out_b, 412, Layer::Top));
+                    top_elements.extend(render_layer_elements(renderer, out_b, phone_width(), Layer::Top));
                 }
 
                 let mut overlay_elements = if state.shell_state.drawer_open
@@ -2500,7 +2500,7 @@ impl PenumbraCompositor {
                     overlay_elements.extend(render_layer_elements(
                         renderer,
                         out_b,
-                        412,
+                        phone_width(),
                         Layer::Overlay,
                     ));
                 }
@@ -2508,12 +2508,12 @@ impl PenumbraCompositor {
                 // 1. Scene Capture Pass (when QuickSettings gesture is active):
                 // Render underlying phone layers (wallpaper, homescreen, app, overview) into offscreen scene_tex
                 let scene_tex_id = if qs_progress > 0.001 {
-                    let scene_tex = state.qs_backdrop_pipeline.ensure_scene_texture(renderer, PHONE_W, PHONE_H)?;
+                    let scene_tex = state.qs_backdrop_pipeline.ensure_scene_texture(renderer, phone_width(), PHONE_H)?;
                     let tex_id = scene_tex.tex_id();
                     {
                         let mut scene_target = renderer.bind(scene_tex)?;
-                        let mut scene_frame = renderer.render(&mut scene_target, (PHONE_W, PHONE_H).into(), Transform::Flipped180)?;
-                        let phone_damage = Rectangle::from_size((PHONE_W, PHONE_H).into());
+                        let mut scene_frame = renderer.render(&mut scene_target, (phone_width(), PHONE_H).into(), Transform::Flipped180)?;
+                        let phone_damage = Rectangle::from_size((phone_width(), PHONE_H).into());
                         scene_frame.clear(Color32F::new(0.038, 0.030, 0.055, 1.0), &[phone_damage])?;
                         draw_render_elements(&mut scene_frame, 1.0, &bg_elements, &[phone_damage])?;
                         draw_render_elements(&mut scene_frame, 1.0, &bottom_elements, &[phone_damage])?;
@@ -2535,7 +2535,7 @@ impl PenumbraCompositor {
 
                 // Accent divider between Phone Display (Output A) and External Monitor (Output B)
                 if state.is_convergence_active {
-                    let divider = Rectangle::new((412, 0).into(), (2, window_size.h).into());
+                    let divider = Rectangle::new((phone_width(), 0).into(), (2, window_size.h).into());
                     frame.clear(Color32F::new(0.35, 0.25, 0.50, 1.0), &[divider])?;
                 }
 
@@ -2548,7 +2548,7 @@ impl PenumbraCompositor {
                             gl,
                             scene_id,
                             qs_progress,
-                            PHONE_W,
+                            phone_width(),
                             PHONE_H,
                         );
                     })?;
