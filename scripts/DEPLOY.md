@@ -65,7 +65,10 @@ when no device width is configured. The logical height remains 915.
 ### UI verification after rebuilding
 
 Check that the home screen, apps, bars and keyboard span the display,
-then open the top shade and swipe upward from empty space and its bottom
+including the wallpaper and app-drawer contents. The shell and keyboard
+Window components use preferred dimensions so fixed 412-pixel bindings
+do not constrain child layouts inside wider Wayland buffers.
+Then open the top shade and swipe upward from empty space and its bottom
 handle. Shade gestures now use screen coordinates and incremental motion,
 and state notifications are drained during its close animation.
 
@@ -79,6 +82,26 @@ fully after a resize. The desktop-shell supervisor waits for an external
 display rather than repeatedly launching on a phone-only session.
 These changes require on-device validation; no new frame-rate measurement
 or compilation was performed while preparing them.
+
+The app drawer now slides as an opaque panel over a static wallpaper.
+Its opening animation no longer crossfades full-screen crisp/blurred
+wallpaper layers or animates full-screen scrim/workspace opacity. This
+trades the translucent backdrop effect for less software rendering work;
+the top shade keeps its existing compositor backdrop.
+
+### Brightness
+
+Deployment reloads the backlight udev rule, triggers add events for
+existing devices and applies `video:0664` to their `brightness` attributes.
+The previous default change trigger did not match the add-only rule,
+leaving the running S4 session unable to write its brightness value.
+The live permission repair was checked with an unprivileged write/read
+of the current value on `4700000.dsi.0`.
+
+Slider requests are coalesced over 35 ms to avoid writing the panel for
+every pointer event. The service rejects invalid readings, zero maxima
+and nonfinite input rather than assuming a 255-step device. Test slider
+movement after deployment and verify it again after reboot.
 
 ### Reusing ARMv7 build work
 
