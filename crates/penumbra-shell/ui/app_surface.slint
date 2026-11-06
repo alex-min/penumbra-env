@@ -142,25 +142,14 @@ export component AppSurface inherits Rectangle {
         image-fit: cover;
     }
 
-    // Progressive Blurred Wallpaper rendering (opacity modulated by drawer-progress!)
-    if root.has-wallpaper && root.has-blurred-wallpaper: Image {
-        x: 0px;
-        y: 0px;
-        width: parent.width;
-        height: parent.height;
-        source: root.wallpaper-blurred-image;
-        image-fit: cover;
-        opacity: root.is-dragging-app ? 0.0 : root.drawer-progress;
-    }
-
-    // Material 3 Expressive Scrim overlay (progressively darkens as drawer pulls up)
+    // Keep the wallpaper and scrim unchanged while the opaque drawer slides over them.
     Rectangle {
         x: 0px;
         y: 0px;
         width: parent.width;
         height: parent.height;
         background: Theme.surface-container-lowest;
-        opacity: root.is-dragging-app ? 0.15 : (root.has-wallpaper ? (0.20 + (root.drawer-progress * 0.65)) : (root.drawer-progress * 0.85));
+        opacity: root.is-dragging-app ? 0.15 : (root.has-wallpaper ? 0.20 : 0.0);
     }
 
     // Ambient Iris Glow in the background (when no wallpaper is set)
@@ -171,7 +160,7 @@ export component AppSurface inherits Rectangle {
         height: 320px;
         border-radius: 160px;
         background: #25407026;
-        opacity: Math.clamp(1.0 - root.drawer-progress, 0.0, 1.0);
+        opacity: 1.0;
     }
 
     // Edge Dwell Timer for dragging apps across homescreen pages (Android Workspace behavior)
@@ -231,9 +220,7 @@ export component AppSurface inherits Rectangle {
         y: 0px;
         width: parent.width;
         height: parent.height;
-        // As App Drawer is pulled up, homescreen content progressively fades and recedes, but reveals 100% during app drag
-        opacity: root.is-dragging-app ? 1.0 : Math.clamp(1.0 - (root.drawer-progress * 1.6), 0.0, 1.0);
-        visible: (root.is-dragging-app || self.opacity > 0.01) && (root.active-mode == 0 || root.active-mode == 2);
+        visible: (root.is-dragging-app || root.drawer-progress < 1.0) && (root.active-mode == 0 || root.active-mode == 2);
 
         // Background gesture listener:
         // - Dragging UP pulls up App Drawer interactively with 1:1 finger tracking
