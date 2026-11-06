@@ -88,9 +88,13 @@ The local package keeps its caches under
 - `cargo/`: downloaded crates and registry metadata.
 - `source/armv7/`: stable source paths, synchronized by content without
   changing the timestamps of unchanged files.
-- `target/armv7/`: compiled dependencies, binaries and incremental state.
+- `target/armv7/`: compiled dependencies and binaries.
 
 These survive ordinary package cleanup and `--force` rebuilds. The
+recipe unsets `CARGO_INCREMENTAL` because crossdirect's sccache wrapper
+rejects rustc incremental compilation. Cargo can still reuse unchanged
+crates from the persistent target directory.
+The
 workspace is built once with `penumbra-comp/native-drm` enabled. The first
 build after this cache change is still cold; subsequent changes should
 reuse dependencies and unchanged crates. Modified crates and their
