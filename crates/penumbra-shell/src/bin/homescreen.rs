@@ -1191,6 +1191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let apps_list = Arc::clone(&apps_list);
         let layout_config = Rc::clone(&layout_config);
         let animate_drawer_to = Rc::clone(&animate_drawer_to);
+        let last_windows = RefCell::new(None);
         task_timer.start(TimerMode::Repeated, Duration::from_millis(50), move || {
             let state = ShellState::load();
             if let Some(ui) = ui_weak.upgrade() {
@@ -1245,6 +1246,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
                 let windows = read_windows();
+                if last_windows.borrow().as_ref() == Some(&windows) {
+                    return;
+                }
+                *last_windows.borrow_mut() = Some(windows.clone());
                 let apps = apps_list.read().unwrap();
                 let tasks_model = Rc::new(VecModel::default());
                 for win in windows {

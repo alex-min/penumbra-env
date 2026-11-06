@@ -23,6 +23,7 @@ export component DrawerAppTile inherits Rectangle {
     property <float> touch-y: 0.0;
     property <float> last-y: 0.0;
     property <float> last-screen-y: 0.0;
+    property <float> touch-screen-y: 0.0;
     property <float> velocity: 0.0;
     property <bool> is-down: false;
     property <bool> is-dragging: false;
@@ -100,6 +101,7 @@ export component DrawerAppTile inherits Rectangle {
                 root.touch-y = tile-ta.mouse-y / 1px;
                 root.last-y = tile-ta.mouse-y / 1px;
                 root.last-screen-y = cur-screen-y;
+                root.touch-screen-y = cur-screen-y;
                 root.velocity = 0.0;
                 root.is-down = true;
                 root.is-dragging = false;
@@ -111,8 +113,8 @@ export component DrawerAppTile inherits Rectangle {
                 let step-screen-dy = cur-screen-y - root.last-screen-y;
                 root.last-screen-y = cur-screen-y;
                 let cur-y = tile-ta.mouse-y / 1px;
-                let step-tile-dy = cur-y - root.last-y;
-                let total-dy = cur-y - root.touch-y;
+                let step-tile-dy = step-screen-dy;
+                let total-dy = cur-screen-y - root.touch-screen-y;
                 let total-dx = (tile-ta.mouse-x / 1px) - root.touch-x;
 
                 if (root.is-dragging) {
