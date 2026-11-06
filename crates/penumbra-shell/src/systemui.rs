@@ -772,12 +772,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    qs.on_brightness_changed(|val| {
-        info!("QuickSettings: Brightness set to {:.2}", val);
-        if let Err(error) = apply_backlight_ratio(val as f64) {
-            warn!(?error, "Failed to apply system backlight level");
-        }
-    });
+    {
+        let brightness_timer = Rc::new(Timer::default());
+        let pending_brightness = Rc::new(Cell::new(init_brightness));
+        qs.on_brightness_changed(move |val| {
+            if !val.is_finite() {
+                return;
+            }
+            pending_brightness.set(val as f64);
+            if brightness_timer.running() {
+                return;
+            }
+            let pending_brightness = Rc::clone(&pending_brightness);
+            brightness_timer.start(TimerMode::SingleShot, Duration::from_millis(35), move || {
+                if let Err(error) = apply_backlight_ratio(pending_brightness.get()) {
+                    warn!(?error, "Failed to apply system backlight level");
+                }
+            });
+        });
+    }
 
     let volume_dismiss_timer = Rc::new(RefCell::new(Timer::default()));
     {
