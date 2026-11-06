@@ -158,25 +158,25 @@ cargo test --workspace
 
 ## Running on Hardware
 
-Penumbra targets ARM64 Linux phones (tested daily on postmarketOS / Alpine Linux on Fairphone 4). 
+Penumbra is developed on ARM64 Linux phones. The deployment script also
+supports the Galaxy S4 (`jflte`, ARMv7) through the adjacent postmarketOS
+package recipe, with OpenRC/greetd session selection.
 
-The automated deployment script handles cross-compilation in Docker and SSH staging:
+```sh
+# Build for the connected phone, install, and restart its display manager
+./scripts/deploy.sh --build
 
-```bash
-# Build ARM64 release binaries and deploy to phone
-DEVICE_PASSWORD=1 ./scripts/deploy.sh --build
+# Deploy the existing build without restarting the current session
+./scripts/deploy.sh --no-restart
 
-# Deploy existing release build without recompiling
-DEVICE_PASSWORD=1 ./scripts/deploy.sh
-
-# Deploy without restarting the session
-DEVICE_PASSWORD=1 ./scripts/deploy.sh --no-restart
-
-# Check phone connection and running status
+# Check connectivity and running status without making changes
 ./scripts/deploy.sh --status
 ```
 
-Options can be customized via CLI flags (e.g., `--ip 172.16.42.1 --user user`) or environment variables (`DEVICE_IP`, `DEVICE_PASSWORD`, `SUDO_PASSWORD`).
+On the S4, select **Penumbra Mobile** in the login screen after installation.
+Select **Phosh** to return. SSH uses normal keys, an agent or an interactive
+prompt. See [the deployment guide](scripts/DEPLOY.md) for prerequisites,
+package snapshot behavior, diagnostics and display limitations.
 
 ---
 

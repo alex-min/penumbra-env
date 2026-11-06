@@ -24,6 +24,9 @@ export SDL_VIDEODRIVER=wayland
 export MOZ_ENABLE_WAYLAND=1
 export XKB_CONFIG_ROOT="${XKB_CONFIG_ROOT:-/usr/share/X11/xkb}"
 export SLINT_DEFAULT_FONT="${SLINT_DEFAULT_FONT:-/usr/share/fonts/droid/DroidSans.ttf}"
+if [[ -r /etc/penumbra/session.conf ]]; then
+    source /etc/penumbra/session.conf
+fi
 export PENUMBRA_OUTPUT_WIDTH="${PENUMBRA_OUTPUT_WIDTH:-1080}"
 export PENUMBRA_OUTPUT_HEIGHT="${PENUMBRA_OUTPUT_HEIGHT:-2340}"
 # Shells lay out at 1:1 on the fixed 412x915 logical canvas; the compositor scales it to the panel.

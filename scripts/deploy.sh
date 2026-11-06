@@ -1,352 +1,247 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Penumbra Mobile DE - Optimized Deployment Script
-# Automatically deploys cross-compiled ARM64 binaries and assets to target device (e.g. Fairphone 4).
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+DEVICE_IP=${DEVICE_IP:-172.16.42.1}
+DEVICE_USER=${DEVICE_USER:-user}
+SUDO_PASSWORD=${SUDO_PASSWORD:-1}
+PMAPORTS_DIR=${PMAPORTS_DIR:-$repo_root/../pmaports}
+PMB_WORK=${PMB_WORK:-$repo_root/../work}
+build=false
+restart=true
+action=deploy
+apk=${PENUMBRA_APK:-}
+release_dir=${PENUMBRA_RELEASE_DIR:-}
 
-TARGET="aarch64-unknown-linux-musl"
-DEVICE_IP="${DEVICE_IP:-172.16.42.1}"
-DEVICE_USER="${DEVICE_USER:-user}"
-DEVICE_PASSWORD="${DEVICE_PASSWORD:-1}"
-SUDO_PASSWORD="${SUDO_PASSWORD:-1}"
-SESSION_MANAGER="${SESSION_MANAGER:-auto}"
-BUILD_FIRST=false
-DEPLOY_ONLY=true
-RESTART_SESSION=true
-CHECK_STATUS_ONLY=false
-SHOW_LOGS=false
-
-# Terminal colors
-BOLD='\033[1m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log_info() {
-    printf "${BLUE}[INFO]${NC} %s\n" "$1"
-}
-
-log_success() {
-    printf "${GREEN}[✓]${NC} %s\n" "$1"
-}
-
-log_warn() {
-    printf "${YELLOW}[WARN]${NC} %s\n" "$1"
-}
-
-log_error() {
-    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
-}
-
+log() { printf '[penumbra] %s\n' "$*" >&2; }
+die() { log "$*"; exit 1; }
 usage() {
-    cat <<EOF
-${BOLD}Usage:${NC} scripts/deploy.sh [OPTIONS]
+    cat <<'EOF'
+Usage: ./scripts/deploy.sh [OPTIONS]
 
-${BOLD}Options:${NC}
-  --build               Build ARM64 alpine binaries before deploying (via Docker).
-  --no-build            Skip build; deploy existing pre-built release binaries (default).
-  --no-restart          Do not restart the display manager / session after deployment.
-  --status              Check connection and running Penumbra status on phone and exit.
-  --logs                View the recent session log on the phone.
-  --ip <ADDRESS>        Device IP address (default: 172.16.42.1 or \$DEVICE_IP).
-  --user <USER>         Remote SSH username (default: user or \$DEVICE_USER).
-  --password <PASS>     SSH password (default: 1 or \$DEVICE_PASSWORD).
-  --sudo-pass <PASS>    Sudo password (default: 1 or \$SUDO_PASSWORD).
-  -h, --help            Show this help message.
+  --build                Build for the connected phone before deploying.
+  --no-build             Deploy an existing build (default).
+  --apk PATH             Use an existing ARMv7 penumbra-env APK.
+  --release-dir PATH     Use existing binaries instead of an APK.
+  --no-restart           Install without restarting the display manager.
+  --status               Show phone, display-manager and battery status.
+  --logs                 Show recent Penumbra session logs.
+  --ip ADDRESS           SSH address (default: 172.16.42.1).
+  --user USER            SSH user (default: user).
+  --sudo-pass PASSWORD   Remote sudo password (default: 1).
+  -h, --help             Show this help.
 
-${BOLD}Environment Variables:${NC}
-  DEVICE_IP             Device IP address (default: 172.16.42.1)
-  DEVICE_USER           Device SSH user (default: user)
-  DEVICE_PASSWORD       SSH password (default: 1)
-  SUDO_PASSWORD         Sudo password on device (default: 1)
-
-${BOLD}Examples:${NC}
-  ./scripts/deploy.sh                     # Fast deploy & restart session
-  ./scripts/deploy.sh --build             # Cross-compile in Docker first, then deploy & restart
-  ./scripts/deploy.sh --status            # Check phone reachability and running processes
-  ./scripts/deploy.sh --logs              # Show penumbra session logs on phone
+SSH uses normal keys, an agent or interactive authentication; no sshpass.
+ARMv7 builds use pmbootstrap and ../pmaports/temp/penumbra-env.
+ARM64 builds use the existing Docker builder.
+Override package locations with PMAPORTS_DIR and PMB_WORK.
+After deployment select "Penumbra Mobile" in the login screen.
 EOF
 }
 
-while (($# > 0)); do
+while (($#)); do
     case "$1" in
-        --build|-b)
-            BUILD_FIRST=true
-            DEPLOY_ONLY=false
-            ;;
-        --no-build|--deploy-only)
-            BUILD_FIRST=false
-            DEPLOY_ONLY=true
-            ;;
-        --no-restart|--skip-restart)
-            RESTART_SESSION=false
-            ;;
-        --status)
-            CHECK_STATUS_ONLY=true
-            ;;
-        --logs)
-            SHOW_LOGS=true
-            ;;
-        --ip|--device-ip)
-            (($# >= 2)) || { log_error "Missing value for $1"; exit 2; }
-            DEVICE_IP="$2"
-            shift
-            ;;
-        --user|--device-user)
-            (($# >= 2)) || { log_error "Missing value for $1"; exit 2; }
-            DEVICE_USER="$2"
-            shift
-            ;;
+        --build|-b) build=true ;;
+        --no-build|--deploy-only) build=false ;;
+        --no-restart|--skip-restart) restart=false ;;
+        --status) action=status ;;
+        --logs) action=logs ;;
+        --ip|--device-ip|--user|--device-user|--sudo-pass|--sudo-password|--apk|--release-dir)
+            (($# >= 2)) && [[ -n "$2" ]] || die "Missing value for $1"
+            case "$1" in
+                --ip|--device-ip) DEVICE_IP=$2 ;;
+                --user|--device-user) DEVICE_USER=$2 ;;
+                --sudo-pass|--sudo-password) SUDO_PASSWORD=$2 ;;
+                --apk) apk=$2 ;;
+                --release-dir) release_dir=$2 ;;
+            esac
+            shift ;;
         --password|--device-password)
-            (($# >= 2)) || { log_error "Missing value for $1"; exit 2; }
-            DEVICE_PASSWORD="$2"
-            shift
-            ;;
-        --sudo-pass|--sudo-password)
-            (($# >= 2)) || { log_error "Missing value for $1"; exit 2; }
-            SUDO_PASSWORD="$2"
-            shift
-            ;;
-        -h|--help)
-            usage
-            exit 0
-            ;;
-        *)
-            log_error "Unknown option: $1"
-            usage >&2
-            exit 2
-            ;;
+            die 'Use SSH keys, an agent or interactive SSH authentication instead of --password.' ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; die "Unknown option: $1" ;;
     esac
     shift
 done
 
-repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-release_dir="$repo_root/target/cross/$TARGET/release"
-staging_dir="penumbra-deploy-$(date +%s)"
-remote="${DEVICE_USER}@${DEVICE_IP}"
-
-# Build SSH / SCP command arrays
-ssh_cmd=(ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
-scp_cmd=(scp -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null)
-
-if [[ -n "$DEVICE_PASSWORD" ]]; then
-    if ! command -v sshpass >/dev/null 2>&1; then
-        log_error "sshpass is required for password authentication. Install it (e.g. sudo apt install sshpass / apk add sshpass)."
-        exit 1
-    fi
-    ssh_cmd=(sshpass -p "$DEVICE_PASSWORD" ssh -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
-    scp_cmd=(sshpass -p "$DEVICE_PASSWORD" scp -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=/dev/null)
+[[ $DEVICE_USER =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || die 'Invalid SSH user'
+[[ $DEVICE_IP != -* && $DEVICE_IP != *[[:space:]]* && $DEVICE_IP != *@* ]] || die 'Invalid SSH address'
+[[ -z $apk || -z $release_dir ]] || die 'Choose --apk or --release-dir, not both.'
+if $build && [[ -n $apk || -n $release_dir ]]; then
+    die '--build cannot be combined with an explicit artifact path.'
 fi
+remote=$DEVICE_USER@$DEVICE_IP
+ssh_cmd=(ssh -o ConnectTimeout=8 -o ServerAliveInterval=10 -o ServerAliveCountMax=2)
+scp_cmd=(scp -o ConnectTimeout=8)
 
-# Build ARM64 alpine binaries if requested
-if [[ "$BUILD_FIRST" == true ]]; then
-    log_info "Cross-compiling ARM64 Alpine release binaries via Docker..."
-    "$repo_root/scripts/build-arm64-alpine.sh"
-    log_success "ARM64 compilation completed"
+log "Connecting to $remote"
+if ! arch=$("${ssh_cmd[@]}" "$remote" uname -m); then
+    die "Cannot reach $remote. Check USB networking (../tools/fixup-network.sh) and wake/unlock the phone."
 fi
+case "$arch" in
+    armv7l|armv8l) target=armv7 ;;
+    aarch64) target=aarch64 ;;
+    *) die "Unsupported phone architecture: $arch" ;;
+esac
 
-# Quick connectivity test
-log_info "Testing connectivity to device at ${remote}..."
-if ! "${ssh_cmd[@]}" "$remote" 'true' >/dev/null 2>&1; then
-    log_error "Cannot connect to ${remote}. Ensure the phone is connected via USB and SSH is running."
-    exit 1
-fi
-log_success "Device reachable at ${DEVICE_IP}"
-
-# Status-only check
-if [[ "$CHECK_STATUS_ONLY" == true ]]; then
-    log_info "Fetching system and Penumbra status from phone..."
-    "${ssh_cmd[@]}" "$remote" bash -s <<'STATUS_SCRIPT'
-echo "=== Host Info ==="
+if [[ $action == status ]]; then
+    "${ssh_cmd[@]}" "$remote" sh -s <<'STATUS'
+set -eu
 uname -a
 uptime
-echo "=== Display Manager ==="
-for svc in gdm tinydm greetd phosh; do
-    if systemctl is-active "$svc" >/dev/null 2>&1; then
-        echo "Active service: $svc"
+if command -v rc-service >/dev/null 2>&1; then
+    for service in greetd lightdm gdm tinydm; do
+        rc-service "$service" status 2>/dev/null || true
+    done
+elif command -v systemctl >/dev/null 2>&1; then
+    systemctl --no-pager --full status greetd gdm lightdm tinydm 2>/dev/null || true
+fi
+pgrep -af 'penumbra|phrog|phosh|phoc' || true
+for property in capacity status voltage_now; do
+    if [ -r "/sys/class/power_supply/battery/$property" ]; then
+        printf '%s: ' "$property"
+        cat "/sys/class/power_supply/battery/$property"
     fi
 done
-echo "=== Penumbra Processes ==="
-pgrep -la penumbra || echo "No penumbra processes running."
-echo "=== Power / Battery ==="
-if [ -d /sys/class/power_supply/battery ]; then
-    capacity=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null || echo "?")
-    status=$(cat /sys/class/power_supply/battery/status 2>/dev/null || echo "?")
-    echo "Battery: ${capacity}% (${status})"
-fi
-STATUS_SCRIPT
+STATUS
+    exit 0
+elif [[ $action == logs ]]; then
+    "${ssh_cmd[@]}" "$remote" 'tail -n 80 /tmp/penumbra-session-*.log 2>/dev/null || true'
     exit 0
 fi
 
-# Show logs
-if [[ "$SHOW_LOGS" == true ]]; then
-    log_info "Displaying recent session log..."
-    "${ssh_cmd[@]}" "$remote" 'cat /tmp/penumbra-session-*.log 2>/dev/null | tail -n 60 || journalctl -u gdm --lines=50 --no-pager'
-    exit 0
+if $build; then
+    if [[ $target == armv7 ]]; then
+        PMAPORTS_DIR="$PMAPORTS_DIR" "$repo_root/scripts/build-armv7-alpine.sh" >&2
+    else
+        "$repo_root/scripts/build-arm64-alpine.sh" >&2
+    fi
 fi
 
-# Comprehensive list of canonical binaries
-required_bins=(
-    penumbra-comp
-    penumbra-top-bar
-    penumbra-homescreen
-    penumbra-nav-bar
-    penumbra-settings
-    penumbra-keyboard
-    penumbra-greeter
-    penumbra-shell
-)
+mode=binaries
+if [[ $target == armv7 && -z $release_dir ]]; then
+    mode=apk
+    if [[ -z $apk ]]; then
+        apkbuild=$PMAPORTS_DIR/temp/penumbra-env/APKBUILD
+        [[ -f $apkbuild ]] || die "Missing $apkbuild"
+        version=$(sed -n 's/^pkgver=//p' "$apkbuild")-r$(sed -n 's/^pkgrel=//p' "$apkbuild")
+        apk=$PMB_WORK/packages/edge/armv7/penumbra-env-$version.apk
+    fi
+    [[ -f $apk ]] || die "Missing $apk; run ./scripts/deploy.sh --build first."
+    info=$(tar --warning=no-unknown-keyword -xOf "$apk" .PKGINFO)
+    grep -qx 'pkgname = penumbra-env' <<<"$info" || die 'APK is not penumbra-env.'
+    grep -qx 'arch = armv7' <<<"$info" || die 'APK is not built for ARMv7.'
+else
+    [[ -z $apk ]] || die '--apk is only supported for ARMv7.'
+    release_dir=${release_dir:-$repo_root/target/cross/aarch64-unknown-linux-musl/release}
+    required_bins=(penumbra-comp penumbra-top-bar penumbra-homescreen penumbra-nav-bar
+        penumbra-settings penumbra-keyboard penumbra-greeter penumbra-shell penumbra-desktop-shell)
+    for binary in "${required_bins[@]}"; do
+        [[ -x $release_dir/$binary ]] || die "Missing executable: $release_dir/$binary"
+        header=$(LC_ALL=C readelf -h "$release_dir/$binary")
+        if [[ $target == armv7 ]]; then
+            grep -Eq 'Machine:[[:space:]]+ARM$' <<<"$header" || die "$binary is not ARMv7."
+            grep -q 'hard-float ABI' <<<"$header" || die "$binary does not use the ARM hard-float ABI."
+        else
+            grep -Eq 'Machine:[[:space:]]+AArch64$' <<<"$header" || die "$binary is not ARM64."
+        fi
+    done
+fi
 
-log_info "Validating release binaries in ${release_dir}..."
-for binary in "${required_bins[@]}"; do
-    if [[ ! -f "$release_dir/$binary" ]]; then
-        log_error "Missing binary: $release_dir/$binary"
-        log_error "Run './scripts/deploy.sh --build' to compile the binaries first."
+"${ssh_cmd[@]}" "$remote" 'command -v bash >/dev/null' || die 'Install bash on the phone first.'
+stage=$("${ssh_cmd[@]}" "$remote" 'mktemp -d /tmp/penumbra-deploy.XXXXXXXX')
+[[ $stage =~ ^/tmp/penumbra-deploy\.[a-zA-Z0-9]+$ ]] || die 'Unexpected staging path'
+cleanup() { "${ssh_cmd[@]}" "$remote" "rm -rf '$stage'" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+if [[ $mode == apk ]]; then
+    "${scp_cmd[@]}" "$apk" "$remote:$stage/penumbra-env.apk" >&2
+else
+    "${ssh_cmd[@]}" "$remote" "mkdir '$stage/bin' '$stage/assets'"
+    "${scp_cmd[@]}" "${required_bins[@]/#/$release_dir/}" "$remote:$stage/bin/" >&2
+    "${scp_cmd[@]}" "$repo_root"/scripts/penumbra{,-native,-nested}-session \
+        "$repo_root"/data/penumbra{,-settings,-keyboard}.desktop "$remote:$stage/" >&2
+    "${scp_cmd[@]}" -r "$repo_root/assets/." "$remote:$stage/assets/" >&2
+fi
+
+# Keep the installer separate from sudo's password input.
+"${ssh_cmd[@]}" "$remote" "cat > '$stage/install.sh'" <<'INSTALL'
+#!/bin/sh
+set -eu
+stage=$1 mode=$2 target=$3 login_user=$4 restart=$5
+if [ "$mode" = apk ]; then
+    apk --no-interactive --wait 30 add --allow-untrusted "$stage/penumbra-env.apk" >&2
+    compositor=/usr/bin/penumbra-comp
+else
+    install -d /usr/local/bin /usr/share/wayland-sessions /usr/share/applications /usr/share/penumbra/assets
+    install -m755 "$stage"/bin/* "$stage"/penumbra*-session /usr/local/bin/
+    install -m644 "$stage/penumbra.desktop" /usr/share/wayland-sessions/
+    install -m644 "$stage/penumbra-settings.desktop" "$stage/penumbra-keyboard.desktop" /usr/share/applications/
+    cp -a "$stage/assets/." /usr/share/penumbra/assets/
+    compositor=/usr/local/bin/penumbra-comp
+fi
+
+for binary in "$(dirname "$compositor")"/penumbra-*; do
+    case "$binary" in *-session) continue ;; esac
+    dependencies=$(ldd "$binary" 2>&1) || {
+        case "$dependencies" in *'Not a valid dynamic program'*|*'not a dynamic executable'*|*'statically linked'*) continue ;; esac
+        printf '%s\n' "$dependencies" >&2
+        exit 1
+    }
+    if printf '%s\n' "$dependencies" | grep -Eq 'not found|Error loading|Error relocating'; then
+        printf '%s\n' "$dependencies" >&2
         exit 1
     fi
 done
-log_success "All $((${#required_bins[@]})) release binaries found."
 
-# Create remote staging directory
-log_info "Preparing staging directory on device..."
-"${ssh_cmd[@]}" "$remote" "mkdir -p '$staging_dir/bin' '$staging_dir/assets'"
-
-# Copy binaries
-log_info "Transferring release binaries to phone..."
-"${scp_cmd[@]}" "${required_bins[@]/#/$release_dir/}" "$remote:$staging_dir/bin/"
-log_success "Binaries transferred."
-
-# Copy session scripts and desktop definitions
-log_info "Transferring session scripts and desktop definitions..."
-"${scp_cmd[@]}" \
-    "$repo_root/scripts/penumbra-session" \
-    "$repo_root/scripts/penumbra-nested-session" \
-    "$repo_root/scripts/penumbra-native-session" \
-    "$repo_root/data/penumbra.desktop" \
-    "$repo_root/data/penumbra-settings.desktop" \
-    "$repo_root/data/penumbra-keyboard.desktop" \
-    "$remote:$staging_dir/"
-
-# Copy assets
-if [[ -d "$repo_root/assets" ]]; then
-    log_info "Transferring Penumbra assets..."
-    "${scp_cmd[@]}" -r "$repo_root/assets/." "$remote:$staging_dir/assets/"
+if [ "$target" = armv7 ]; then
+    install -d /etc/penumbra
+    if [ -f /etc/penumbra/session.conf ]; then
+        cp -p /etc/penumbra/session.conf /etc/penumbra/session.conf.before-deploy
+    fi
+    cat > /etc/penumbra/session.conf <<'CONFIG'
+export PENUMBRA_OUTPUT_WIDTH=1080
+export PENUMBRA_OUTPUT_HEIGHT=1920
+export PENUMBRA_SCALE_FACTOR=1.0
+CONFIG
 fi
-log_success "Assets and configurations staged."
-
-# Installation on device
-log_info "Installing binaries and setting permissions on device..."
-printf -v remote_env 'SESSION_MANAGER=%q PENUMBRA_LOGIN_USER=%q STAGING_DIR=%q RESTART_SESSION=%q' \
-    "$SESSION_MANAGER" "$DEVICE_USER" "$staging_dir" "$RESTART_SESSION"
-
-sudo_script='
-set -euo pipefail
-
-# 1. Install binaries to /usr/local/bin
-install -d /usr/local/bin /usr/share/wayland-sessions /usr/share/penumbra/assets /usr/share/applications
-install -m 0755 "$STAGING_DIR"/bin/* /usr/local/bin/
-
-# 2. Install session wrappers
-install -m 0755 "$STAGING_DIR"/penumbra-session /usr/local/bin/penumbra-session
-install -m 0755 "$STAGING_DIR"/penumbra-nested-session /usr/local/bin/penumbra-nested-session
-install -m 0755 "$STAGING_DIR"/penumbra-native-session /usr/local/bin/penumbra-native-session
-
-# 3. Install desktop entries
-install -m 0644 "$STAGING_DIR"/penumbra.desktop /usr/share/wayland-sessions/penumbra.desktop
-install -m 0644 "$STAGING_DIR"/penumbra-settings.desktop /usr/share/applications/penumbra-settings.desktop
-install -m 0644 "$STAGING_DIR"/penumbra-keyboard.desktop /usr/share/applications/penumbra-keyboard.desktop
-
-# 4. Install assets
-cp -a "$STAGING_DIR"/assets/. /usr/share/penumbra/assets/
-
-# 5. Ensure backlight and input permissions
-mkdir -p /etc/udev/rules.d
-cat > /etc/udev/rules.d/90-backlight.rules <<'\''UDEV_BACKLIGHT'\''
+install -d /etc/udev/rules.d
+cat > /etc/udev/rules.d/90-penumbra-backlight.rules <<'RULE'
 ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod 0664 /sys/class/backlight/%k/brightness"
-UDEV_BACKLIGHT
+RULE
 udevadm control --reload-rules 2>/dev/null || true
 udevadm trigger --subsystem-match=backlight 2>/dev/null || true
-chgrp video /sys/class/backlight/*/brightness 2>/dev/null || true
-chmod 0664 /sys/class/backlight/*/brightness 2>/dev/null || true
-
-addgroup "${PENUMBRA_LOGIN_USER}" video 2>/dev/null || usermod -aG video "${PENUMBRA_LOGIN_USER}" 2>/dev/null || true
-addgroup "${PENUMBRA_LOGIN_USER}" input 2>/dev/null || usermod -aG input "${PENUMBRA_LOGIN_USER}" 2>/dev/null || true
-addgroup "${PENUMBRA_LOGIN_USER}" audio 2>/dev/null || usermod -aG audio "${PENUMBRA_LOGIN_USER}" 2>/dev/null || true
-
-# Ensure local timezone is synchronized (EET/Europe/Bucharest)
-timedatectl set-timezone Europe/Bucharest 2>/dev/null || true
-
-# Ensure greetd user and configuration
-if id greetd >/dev/null 2>&1; then
-    addgroup greetd video 2>/dev/null || usermod -aG video greetd 2>/dev/null || true
-    addgroup greetd input 2>/dev/null || usermod -aG input greetd 2>/dev/null || true
-    mkdir -p /etc/greetd
-    cat > /etc/greetd/config.toml <<'GREETD_CONF'
-[terminal]
-vt = 1
-
-[default_session]
-command = "env SLINT_SCALE_FACTOR=2.62 cage -s -d -- /usr/local/bin/penumbra-greeter"
-user = "greetd"
-GREETD_CONF
-    chmod 0644 /etc/greetd/config.toml
-fi
-
-# Clean up staging directory
-rm -rf "$STAGING_DIR"
-
-# 6. Session restart if requested
-if [[ "$RESTART_SESSION" == true ]]; then
-    if systemctl is-active greetd >/dev/null 2>&1; then
-        echo "[DEVICE] Restarting greetd service..."
-        systemctl restart greetd
-    elif systemctl is-active gdm >/dev/null 2>&1; then
-        echo "[DEVICE] Restarting GDM service..."
-        systemctl restart gdm
-    elif systemctl is-active tinydm >/dev/null 2>&1; then
-        echo "[DEVICE] Restarting tinydm service..."
-        systemctl restart tinydm
-    else
-        echo "[DEVICE] No standard active display manager detected, killing stale penumbra sessions..."
-        pkill -u "${PENUMBRA_LOGIN_USER}" -x penumbra-comp || true
+for group in video input audio; do
+    if ! id -nG "$login_user" | tr ' ' '\n' | grep -qx "$group"; then
+        if command -v usermod >/dev/null 2>&1; then
+            usermod -aG "$group" "$login_user"
+        else
+            addgroup "$login_user" "$group"
+        fi
     fi
+done
+if [ "$restart" = true ]; then
+    if command -v rc-service >/dev/null 2>&1; then
+        for service in greetd lightdm gdm tinydm; do
+            if rc-service "$service" status >/dev/null 2>&1; then
+                exec rc-service "$service" restart
+            fi
+        done
+    elif command -v systemctl >/dev/null 2>&1; then
+        for service in greetd gdm lightdm tinydm; do
+            if systemctl is-active --quiet "$service"; then
+                exec systemctl restart "$service"
+            fi
+        done
+    fi
+    echo 'No active display manager found; log out and select Penumbra manually.' >&2
 fi
-'
+INSTALL
 
-if [[ -n "$SUDO_PASSWORD" ]]; then
-    {
-        printf '%s\n' "$SUDO_PASSWORD"
-        echo "$sudo_script"
-    } | "${ssh_cmd[@]}" "$remote" "sudo -S -p '' env $remote_env bash -s"
+printf -v install_args '%q ' "$stage/install.sh" "$stage" "$mode" "$target" "$DEVICE_USER" "$restart"
+if [[ -n $SUDO_PASSWORD ]]; then
+    printf '%s\n' "$SUDO_PASSWORD" | "${ssh_cmd[@]}" "$remote" "sudo -S -p '' sh $install_args" >&2
 else
-    "${ssh_cmd[@]}" "$remote" "sudo -n env $remote_env bash -s" <<< "$sudo_script"
+    "${ssh_cmd[@]}" "$remote" "sudo -n sh $install_args" >&2
 fi
-
-log_success "Installation complete!"
-
-# Verify shared libraries
-log_info "Verifying shared library resolution on device..."
-missing_libs=$("${ssh_cmd[@]}" "$remote" 'ldd /usr/local/bin/penumbra-comp 2>&1' | grep -E 'not found|Error loading shared library' || true)
-if [[ -n "$missing_libs" ]]; then
-    log_error "penumbra-comp has unresolved shared libraries on the device:"
-    echo "$missing_libs" >&2
-    exit 3
-fi
-log_success "All shared libraries resolved cleanly."
-
-# Verify active session
-if [[ "$RESTART_SESSION" == true ]]; then
-    log_info "Waiting for session to initialize..."
-    sleep 3
-    active_comp=$("${ssh_cmd[@]}" "$remote" 'pgrep -la penumbra-comp || true')
-    if [[ -n "$active_comp" ]]; then
-        log_success "Penumbra compositor is running: $active_comp"
-    else
-        log_warn "penumbra-comp not immediately found. It may be starting up or GDM is re-authenticating."
-        log_info "Check session status with './scripts/deploy.sh --status' or './scripts/deploy.sh --logs'."
-    fi
-fi
-
-log_success "Deployment to ${DEVICE_IP} finished successfully!"
+log 'Installed. Select Penumbra Mobile in the login screen; select Phosh to return.'
