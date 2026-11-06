@@ -145,9 +145,24 @@ penumbra-homescreen &
 shell_pids+=("$!")
 
 # Launch Penumbra Desktop Convergence Shell for external displays (Phase 3)
+external_output_connected() {
+    local connector
+    for connector in /sys/class/drm/card*-*/status; do
+        case "$connector" in *-DSI-*|*-eDP-*) continue ;; esac
+        if [[ -r "$connector" ]] && [[ $(<"$connector") == connected ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 if command -v penumbra-desktop-shell >/dev/null 2>&1; then
     (
         while kill -0 "$penumbra_comp_pid" 2>/dev/null; do
+            if ! external_output_connected; then
+                sleep 2
+                continue
+            fi
             printf '%s [DesktopShell-Supervisor] Starting penumbra-desktop-shell\n' "$(date -Iseconds)"
             penumbra-desktop-shell --output external || true
             if ! kill -0 "$penumbra_comp_pid" 2>/dev/null; then
