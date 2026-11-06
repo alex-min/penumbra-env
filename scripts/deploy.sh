@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 DEVICE_IP=${DEVICE_IP:-172.16.42.1}
 DEVICE_USER=${DEVICE_USER:-user}
-SUDO_PASSWORD=${SUDO_PASSWORD:-1}
+SUDO_PASSWORD=${SUDO_PASSWORD-1}
 PMAPORTS_DIR=${PMAPORTS_DIR:-$repo_root/../pmaports}
 PMB_WORK=${PMB_WORK:-$repo_root/../work}
 build=false

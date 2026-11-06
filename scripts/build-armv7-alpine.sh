@@ -28,5 +28,6 @@ pkgrel=$(sed -n 's/^pkgrel=//p' "$apkbuild")
 sed -i -e "s/^pkgrel=.*/pkgrel=$((pkgrel + 1))/" \
     -e "s/^.*  penumbra-env-jflte.tar.gz\$/$sum  penumbra-env-jflte.tar.gz/" "$apkbuild"
 git -C "$pmaports" add -- temp/penumbra-env/APKBUILD temp/penumbra-env/penumbra-env-jflte.tar.gz
-git -C "$pmaports" commit -m "temp/penumbra-env: snapshot Penumbra $head" >&2
+git -C "$pmaports" commit --only -m "temp/penumbra-env: snapshot Penumbra $head" \
+    -- temp/penumbra-env/APKBUILD temp/penumbra-env/penumbra-env-jflte.tar.gz >&2
 pmbootstrap build --lax --arch armv7 penumbra-env --force >&2
